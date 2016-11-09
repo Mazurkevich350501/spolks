@@ -49,11 +49,15 @@ bool MyServer::ClientAccept()
 
 int MyServer::ExecuteClientThread()
 {
-	CommandParser commandManager;
-	SendSocketMessage(ClientSocket, ">");
+	Session* session = GetSession();
+	string message = ">";
+	if(!session->IsSuccess)
+	{
+		message = session->LastCommand;
+	}
+	SendSocketMessage(ClientSocket, message);
 	while(true)
 	{
-		string message;
 		message = ReadSocketMessage(ClientSocket);
 		int result = Execute(message);
 		if (result < 0) return result;
@@ -78,7 +82,8 @@ void MyServer::AddSession(SOCKET socket)
 	if(GetSession(name) == nullptr)
 	{
 		ActiveSessionName = name;
-		Session newSession(ActiveSessionName, sin.sin_port);
+		// ReSharper disable once CppDeprecatedEntity
+		Session newSession(inet_ntoa(sin.sin_addr), sin.sin_port);
 		Sessions.push_back(newSession);
 	}
 }
@@ -108,7 +113,7 @@ Session* MyServer::GetSession(string name)
 			return &Sessions[i];
 		}
 	}
-	return NULL;
+	return nullptr;
 }
 
 int MyServer::GetSessionIndex(string name)

@@ -34,7 +34,7 @@ map<string, sendCommands> SendCommandMapping()
 	return mapping;
 }
 
-int MyClient::ExecuteCommand(string message)
+int MyClient::ExecuteCommand(string message) const
 {
 	CommandParser commandParcer;
 	commandParcer.setMessage(message);
@@ -80,7 +80,9 @@ int Upload(SOCKET socket, CommandParser params)
 
 int Download(SOCKET socket, CommandParser params)
 {
-	int result = ReadFile(socket, params.getParam(1), stoi(params.getParam(2)), stoi(params.getParam(3)), NULL);
+	int fileSize = FileSize(params.getParam(1));
+	SendSocketMessage(socket, fileSize > 0 ? to_string(fileSize) : "success");
+	int result = ReadFile(socket, params.getParam(1), stoi(params.getParam(2)), fileSize, nullptr);
 	SendSocketMessage(socket, result > 0 ? "success" : "error");
 	return result;
 }

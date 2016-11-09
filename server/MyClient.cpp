@@ -1,6 +1,7 @@
 #include "MyClient.h"
 #include "SocketCommands.h"
 #include <iostream>
+#include <ctime>
 
 void MyClient::StartCient(string serverIp, int serverPort)
 {
@@ -20,7 +21,7 @@ void MyClient::StartCient(string serverIp, int serverPort)
 		host = gethostbyname(serverAddres);
 		if (host == nullptr)
 		{
-			cout << "Unable to resolve server" << endl;
+			ShowMessage("Unable to resolve server");
 			return;
 		}
 		CopyMemory(&server.sin_addr, host->h_addr_list[0],
@@ -33,7 +34,8 @@ SOCKET CreateSocket()
 	SOCKET newSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (newSocket == INVALID_SOCKET)
 	{
-		cout << "Can't create socket" << endl;
+		ShowMessage("Can't create socket");
+		throw static_cast<int>(newSocket);
 	}
 	return newSocket;
 }
@@ -44,7 +46,7 @@ bool MyClient::Connect()
 	if (connect(Socket, reinterpret_cast<struct sockaddr *>(&server),
 		sizeof(server)) == SOCKET_ERROR)
 	{
-		cout << "connect failed" << endl;
+		ShowMessage("connect failed");
 		return false;
 	}
 
@@ -56,10 +58,23 @@ void MyClient::Disconnect() const
 	closesocket(Socket);
 }
 
+void TimeSpan(int ms)
+{
+	const clock_t begin_time = clock();
+	while ((clock() - begin_time) < ms);
+}
+
 bool MyClient::Reconnect()
 {
-
-	return true;
+	const clock_t begin_time = clock();
+	do
+	{
+		if (Connect())
+			return true;
+		TimeSpan(30);
+	}
+	while((clock() - begin_time) / CLOCKS_PER_SEC < 10);
+	return false;
 }
 
 int MyClient::Execute()

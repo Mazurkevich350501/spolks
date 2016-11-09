@@ -109,6 +109,11 @@ int executeDownload(SOCKET socket, CommandParser params, Session* currentSession
 		string message = createStartTransmitMessage("startDownload", params.getParam(1), 
 			fileSize, startPosition);
 		SendSocketMessage(socket, message);
+		message = ReadSocketMessage(socket);
+		if(message != "success\r\n")
+		{
+			fileSize = stoi(message);
+		}
 	}
 	else
 	{

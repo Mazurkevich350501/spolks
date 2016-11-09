@@ -61,7 +61,7 @@ int sendOOBMessage(SOCKET socket, char message)
 int SendFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)
 { 
 	if (currentSession != nullptr)
-		currentSession->setSessionData(filePath, fileSize, startPosition);
+		currentSession->setSessionData("startDownload", filePath, fileSize, startPosition);
 
 	fstream file;
 	file.open(filePath, ios::in | ios::binary | ios::ate);
@@ -111,7 +111,7 @@ int ReadPackege(SOCKET socket, char* package)
 int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)
 {
 	if (currentSession != nullptr)
-		currentSession->setSessionData(filePath, fileSize, startPosition);
+		currentSession->setSessionData("startUpload", filePath, fileSize, startPosition);
 	
 	fstream file;
 	file.open(filePath, ios::out | ios::binary | ios::ate);
@@ -119,10 +119,7 @@ int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 
 	char package[packageLength];
 	int downloadSize = startPosition;
-	WSAPOLLFD arrayy[1];
-	LPWSAPOLLFD Poll = arrayy;
-	Poll[0].fd = socket;
-	Poll[0].events = POLLIN | POLLPRI;
+	file.seekg(startPosition, ios_base::end);
 	while (downloadSize < fileSize)
 	{
 		int ret = ReadPackege(socket, package);

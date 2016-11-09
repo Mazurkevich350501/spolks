@@ -21,12 +21,12 @@ public:
 	void StartCient(string addres, int host);
 	bool Connect();
 	void Disconnect() const;
-	static bool Reconnect();
+	bool Reconnect();
 	int Execute();
 	~MyClient()
 	{
 		closesocket(Socket);
 	}
 private:
-	int ExecuteCommand(string message);
+	int ExecuteCommand(string message) const;
 };

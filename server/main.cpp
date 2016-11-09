@@ -5,6 +5,7 @@
 #include <WinSock2.h>
 #include "MyServer.h"
 #include "MyClient.h"
+#include "SocketCommands.h"
 
 using namespace std;
 
@@ -17,7 +18,7 @@ bool InitWsaData()
 	int err = WSAStartup(0x0101, &WsaData);
 	if (err == SOCKET_ERROR)
 	{
-		cout << "WSAStartup() failed: %ld\n" << GetLastError();
+		ShowMessage(string("WSAStartup() failed: ") += GetLastError());
 		return false;
 	}
 	return true;
@@ -57,7 +58,7 @@ void ShowError(int ex)
 int ServerMain()
 {
 	MyServer server;
-	if (server.StartServer("169.254.1.1", 5050, 4))
+	if (server.StartServer("127.0.0.1", 5050, 4))
 	{
 		while (true)
 		{
@@ -79,7 +80,7 @@ int ServerMain()
 int ClientMain() 
 {
 	MyClient client;
-	client.StartCient("169.254.113.255", 5050);
+	client.StartCient("127.0.0.1", 5050);
 	client.Connect();
 
 	while (true)
@@ -92,8 +93,11 @@ int ClientMain()
 		}
 		catch (int ex)
 		{
-			ShowError(ex);
-			return 0;
+			if(!client.Reconnect())
+			{
+				ShowError(ex);
+				return 0;
+			}
 		}
 	}
 	return 1;
