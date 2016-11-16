@@ -3,7 +3,7 @@
 #include <string>
 
 #define messageBufferLength 1024
-#define packageLength 40960
+#define packageLength 200000
 
 void ShowMessage(string message)
 {
@@ -52,23 +52,16 @@ int SendPackage(SOCKET socket, char* package, int size)
 	return ret;
 }
 
-int sendOOBMessage(SOCKET socket, char message)
-{
-	int ret = send(socket, &message, 1, MSG_OOB);
-	return ret;
-}
-
 int SendFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)
 { 
 	if (currentSession != nullptr)
-		currentSession->setSessionData("startDownload", filePath, fileSize, startPosition);
+		currentSession->setSessionData("download", filePath, fileSize, startPosition);
 
 	fstream file;
 	file.open(filePath, ios::in | ios::binary | ios::ate);
 	if (!file.is_open()) return -1;
 	
 	int nSendSize = file.tellg();
-	if (fileSize != nSendSize) return -2;
 	
 	nSendSize -= startPosition;
 	file.seekg(startPosition, ios_base::beg);
@@ -94,15 +87,6 @@ int SendFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 	return 1;
 }
 
-void ShowDownloadSize(SOCKET socket, int downloadSize)
-{
-	char buf[2];
-	if (recv(socket, buf, 1, MSG_OOB) != SOCKET_ERROR)
-	{
-		ShowMessage(string("download: ") += to_string(downloadSize) += "\n");
-	}
-}
-
 int ReadPackege(SOCKET socket, char* package)
 {
 	return recv(socket, package, packageLength, 0);
@@ -111,7 +95,7 @@ int ReadPackege(SOCKET socket, char* package)
 int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)
 {
 	if (currentSession != nullptr)
-		currentSession->setSessionData("startUpload", filePath, fileSize, startPosition);
+		currentSession->setSessionData("upload", filePath, fileSize, startPosition);
 	
 	fstream file;
 	file.open(filePath, ios::out | ios::binary | ios::ate);
@@ -130,6 +114,7 @@ int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 		}
 		file.write(package, ret);
 		downloadSize += ret;
+		ShowMessage(string(to_string(downloadSize)) += string(" : ") += string(to_string(fileSize)));
 		if (currentSession != nullptr)
 			currentSession->LastPosition = downloadSize;
 	}

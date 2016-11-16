@@ -4,7 +4,7 @@
 #include <map>
 #include <time.h>
 
-enum commands {getTime = 1, echo, close, upload, dowload};
+enum commands {getTime = 1, echo, close, upload, download};
 
 map<string, commands> CommandMapping() {
 	map<string, commands> mapping;
@@ -13,7 +13,7 @@ map<string, commands> CommandMapping() {
 	mapping["echo"] = echo;
 	mapping["close"] = close;
 	mapping["upload"] = upload;
-	mapping["download"] = dowload;
+	mapping["download"] = download;
 
 	return mapping;
 }
@@ -44,7 +44,7 @@ int MyServer::Execute(string message)
 		return executeClose(ClientSocket);
 	case upload:
 		return executeUpload(ClientSocket, cParser, GetSession());
-	case dowload:
+	case download:
 		return executeDownload(ClientSocket, cParser, GetSession());
 	default:
 		SendSocketMessage(ClientSocket, "Invalid command");
@@ -112,7 +112,7 @@ int executeDownload(SOCKET socket, CommandParser params, Session* currentSession
 		message = ReadSocketMessage(socket);
 		if(message != "success\r\n")
 		{
-			fileSize = stoi(message);
+			startPosition = stoi(message);
 		}
 	}
 	else

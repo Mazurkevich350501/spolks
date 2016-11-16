@@ -51,14 +51,13 @@ int MyServer::ExecuteClientThread()
 {
 	Session* session = GetSession();
 	string message = ">";
-	if(!session->IsSuccess)
-	{
-		message = session->LastCommand;
-	}
-	SendSocketMessage(ClientSocket, message);
+	if(session->IsSuccess)
+		SendSocketMessage(ClientSocket, message);
 	while(true)
 	{
-		message = ReadSocketMessage(ClientSocket);
+		message = !session->IsSuccess
+		? session->LastCommand
+		: ReadSocketMessage(ClientSocket);
 		int result = Execute(message);
 		if (result < 0) return result;
 	}
