@@ -89,7 +89,7 @@ string createStartTransmitMessage(string command, string filePath, int fileSize,
 
 int executeUpload(SOCKET socket, CommandParser params, Session* currentSession)
 {
-	int startPosition = params.getParam(3) == "" ? 0 : stoi(params.getParam(3));
+	int startPosition = FileSize(params.getParam(1));
 	string message = createStartTransmitMessage("startUpload", params.getParam(1), stoi(params.getParam(2)), startPosition);
 	SendSocketMessage(socket, message);
 	message = ReadSocketMessage(socket);

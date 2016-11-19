@@ -46,7 +46,6 @@ bool MyClient::Connect()
 	if (connect(Socket, reinterpret_cast<struct sockaddr *>(&server),
 		sizeof(server)) == SOCKET_ERROR)
 	{
-		ShowMessage("connect failed");
 		return false;
 	}
 
@@ -77,7 +76,7 @@ bool MyClient::Reconnect()
 	return false;
 }
 
-int MyClient::Execute()
+int MyClient::Execute() const
 {
 	string message;
 	message = ReadSocketMessage(Socket);

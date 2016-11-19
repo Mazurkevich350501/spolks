@@ -77,6 +77,18 @@ int ServerMain()
 	return 0;
 }
 
+bool ReconnectChoise()
+{
+	int result = 0;
+	while (result < 1 || result > 2)
+	{
+		cout << "Try to reconnect?\n1-yes, 2-no: ";
+		cin >> result;
+		cin.ignore(INT_MAX, '\n');
+	}
+	return result == 1;
+}
+
 int ClientMain() 
 {
 	MyClient client;
@@ -93,12 +105,20 @@ int ClientMain()
 		}
 		catch (int ex)
 		{
-			if(!client.Reconnect())
+			ShowMessage("Connection error\n");
+			while(true)
 			{
-				ShowError(ex);
-				return 0;
+				if (!client.Reconnect())
+				{
+					ShowMessage("Reconnect error\n");
+					if(ReconnectChoise())
+						continue;
+					ShowError(ex);
+					return 0;
+				}
 			}
 		}
 	}
 	return 1;
 }
+

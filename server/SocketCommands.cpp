@@ -114,7 +114,8 @@ int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 		}
 		file.write(package, ret);
 		downloadSize += ret;
-		ShowMessage(string(to_string(downloadSize)) += string(" : ") += string(to_string(fileSize)));
+		ShowMessage(string(to_string(downloadSize)) += string(" : ") 
+			+= to_string(fileSize) += "\n");
 		if (currentSession != nullptr)
 			currentSession->LastPosition = downloadSize;
 	}

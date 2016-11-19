@@ -22,7 +22,7 @@ public:
 	bool Connect();
 	void Disconnect() const;
 	bool Reconnect();
-	int Execute();
+	int Execute() const;
 	~MyClient()
 	{
 		closesocket(Socket);
