@@ -46,9 +46,9 @@ int MyServer::Execute(string message, SOCKET socket)
 		}
 		return executeClose(socket);
 	case upload:
-		return executeUpload(socket, cParser, GetSession());
+		return executeUpload(socket, cParser, GetSession(socket));
 	case download:
-		return executeDownload(socket, cParser, GetSession());
+		return executeDownload(socket, cParser, GetSession(socket));
 	default:
 		SendSocketMessage(socket, "Invalid command");
 		return 0;
@@ -96,11 +96,8 @@ int executeUpload(SOCKET socket, CommandParser params, Session* currentSession)
 	string message = createStartTransmitMessage("startUpload", params.getParam(1), stoi(params.getParam(2)), startPosition);
 	SendSocketMessage(socket, message);
 	message = ReadSocketMessage(socket);
-	int result = message == "success\r\n"
-		? ReadFile(socket, params.getParam(1), stoi(params.getParam(2)), startPosition, currentSession)
-		: 0;
-	SendSocketMessage(socket, result > 0 ? "success" : "error");
-	return result;
+	currentSession->setSessionData("upload", params.getParam(1), stoi(params.getParam(2)), startPosition);
+	return 1;
 }
 
 int executeDownload(SOCKET socket, CommandParser params, Session* currentSession)
@@ -123,9 +120,6 @@ int executeDownload(SOCKET socket, CommandParser params, Session* currentSession
 		SendSocketMessage(socket, "error");
 		return 0;
 	}
-	
-	int result = SendFile(socket, params.getParam(1), fileSize, startPosition, currentSession);
-	string message = ReadSocketMessage(socket);
-	SendSocketMessage(socket, message);
-	return message == "success\r\n" ? result : 0;
+	currentSession->setSessionData("download", params.getParam(1), fileSize, startPosition);
+	return 1;
 }

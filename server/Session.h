@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <WinSock2.h>
 
 using namespace std;
 
@@ -11,7 +12,7 @@ public:
 	string Ip;
 	int Port;
 	string LastCommand;
-	string Filepath;
+	string FilePath;
 	int FileSize;
 	int LastPosition;
 	bool IsSuccess;
@@ -27,13 +28,14 @@ public:
 	}
 	void clearSessionData()
 	{
-		Filepath = "";
+		FilePath = "";
 		FileSize = LastPosition = 0;
 		IsSuccess = true;
+		LastCommand = "";
 	}
 	void setSessionData(string command, string filePath, int fileSize, int lastPosition)
 	{
-		Filepath = filePath;
+		FilePath = filePath;
 		FileSize = fileSize;
 		LastPosition = lastPosition;
 		createLastCommand(command);
@@ -43,7 +45,7 @@ private:
 	void createLastCommand(string command)
 	{
 		LastCommand += command += " ";
-		LastCommand += Filepath += " ";
+		LastCommand += FilePath += " ";
 		LastCommand += to_string(FileSize) + " ";
 		LastCommand += to_string(LastPosition);
 	}

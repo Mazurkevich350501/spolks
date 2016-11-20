@@ -1,6 +1,7 @@
 #include "SocketCommands.h"
 #include <iostream>
 #include <string>
+#include <fstream>
 
 #define messageBufferLength 1024
 #define packageLength 200000
@@ -12,7 +13,7 @@ void ShowMessage(string message)
 
 int FileSize(string filePath)
 {
-	std::ifstream in(filePath, std::ifstream::ate | std::ifstream::binary);
+	ifstream in(filePath, std::ifstream::ate | std::ifstream::binary);
 	int result = in.tellg();
 	return result < 0 ? 0 : result;
 }
@@ -50,6 +51,39 @@ int SendPackage(SOCKET socket, char* package, int size)
 {
 	int ret = send(socket, package, size, 0);
 	return ret;
+}
+
+int SendSocketPackege(Session &session)
+{
+	fstream file;
+	file.open(session.FilePath, ios::in | ios::binary | ios::ate);
+	if (!file.is_open()) return -1;
+
+	file.seekg(session.LastPosition, ios_base::beg);
+	char package[packageLength];
+	if (session.LastPosition < session.FileSize)
+	{
+		int sendSize = session.FileSize - session.LastPosition < packageLength
+			? session.FileSize - session.LastPosition
+			: packageLength;
+		int ret = SendPackage(session.ClientSocket, package, sendSize);
+		if (ret == SOCKET_ERROR)
+		{
+			file.close();
+			throw ret;
+		}
+		file.write(package, ret);
+		session.LastPosition += ret;
+		file.close();
+	}
+	if(session.LastPosition == session.FileSize)
+	{
+		session.clearSessionData();
+		string message = ReadSocketMessage(session.ClientSocket);
+		SendSocketMessage(session.ClientSocket, message);
+		return message == "success\r\n" ? 1 : 0;
+	}
+	return 1;
 }
 
 int SendFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)
@@ -90,6 +124,36 @@ int SendFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 int ReadPackege(SOCKET socket, char* package)
 {
 	return recv(socket, package, packageLength, 0);
+}
+
+int ReadSocketPackege(Session &session)
+{
+	fstream file;
+	file.open(session.FilePath, ios::out | ios::binary | ios::ate);
+	if (!file.is_open()) return -1;
+	
+	char package[packageLength];
+	file.seekg(session.LastPosition, ios_base::end);
+	if(session.LastPosition < session.FileSize)
+	{
+		int ret = ReadPackege(session.ClientSocket, package);
+		if (ret == SOCKET_ERROR)
+		{
+			file.close();
+			throw ret;
+		}
+		file.write(package, ret);
+		session.LastPosition += ret;
+		file.close();
+		ShowMessage(string(to_string(session.LastPosition)) += string(" : ")
+			+= to_string(session.FileSize) += "\n");
+	}
+	if(session.LastPosition == session.FileSize)
+	{
+		session.clearSessionData();
+		SendSocketMessage(session.ClientSocket, "success");
+	}
+	return 1;
 }
 
 int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)

@@ -72,7 +72,10 @@ int MyServer::ServerProcess()
 	while(true)
 	{
 		InitSets();
-		int activity = select(max_sd + 1, &Readfds, NULL, NULL, NULL);
+		timeval tv;
+		tv.tv_sec = 0;
+		tv.tv_usec = 30;
+		int activity = select(max_sd + 1, &Readfds, NULL, NULL, &tv);
 		if ((activity < 0) && (errno != EINTR))
 		{
 			ShowMessage("select error\n");
@@ -103,14 +106,15 @@ Session MyServer::AddSession(SOCKET socket)
 	// ReSharper disable once CppDeprecatedEntity
 	string name = string(string(inet_ntoa(sin.sin_addr)) += ":")
 		+= to_string(sin.sin_port);
-	if(GetSession(name) == nullptr)
+	auto session = GetSession(name);
+	if(session == nullptr)
 	{
 		// ReSharper disable once CppDeprecatedEntity
 		Session newSession(socket, inet_ntoa(sin.sin_addr), sin.sin_port);
 		Sessions.push_back(newSession);
 		return newSession;
 	}
-
+	session->ClientSocket = socket;
 	return GetSession(name)[0];
 }
 
@@ -127,6 +131,7 @@ void MyServer::RemoveSession(Session session)
 		else
 		{
 			GetSession(session.Name)->ClientSocket = 0;
+			ShowMessage(string(string("Disconnect client ") += session.Name) += "\n");
 		}
 	}
 }
@@ -183,7 +188,7 @@ bool MyServer::InitSets()
 		SOCKET socket = Sessions[i].ClientSocket;
 		if(socket > 0)
 		{
-			auto set = !Sessions[i].IsSuccess && Sessions[i].LastCommand.find("download")
+			auto set = !Sessions[i].IsSuccess && Sessions[i].LastCommand.find("download") != -1
 				? &Writefds
 				: &Readfds;
 			FD_SET(socket, set);
@@ -199,32 +204,33 @@ int MyServer::ExecuteClientRequest()
 	string message;
 	for (int i = 0; i < Sessions.size(); i++)
 	{
-		if (FD_ISSET(Sessions[i].ClientSocket, &Readfds))
+		try
 		{
-			if (Sessions[i].IsSuccess)
+			if (FD_ISSET(Sessions[i].ClientSocket, &Readfds))
 			{
-				try
+				if (Sessions[i].IsSuccess)
 				{
 					message = ReadSocketMessage(Sessions[i].ClientSocket);
 					Execute(message, Sessions[i].ClientSocket);
-				}catch(int ex)
+				}
+				else
 				{
-					CloseSocket(Sessions[i]);
-					if (i < Sessions.size())
-						if (Sessions[i].ClientSocket != 0)
-						{
-							i--;
-						}
+					ReadSocketPackege(Sessions[i]);
 				}
 			}
-			else
+			else if (FD_ISSET(Sessions[i].ClientSocket, &Writefds))
 			{
-				//Readsss(Sessions[i]);
+				SendSocketPackege(Sessions[i]);
 			}
 		}
-		else if (FD_ISSET(Sessions[i].ClientSocket, &Writefds))
+		catch (int ex)
 		{
-			//Sendpaket(Sessions[i]);
+			CloseSocket(Sessions[i]);
+			if (i < Sessions.size())
+				if (Sessions[i].ClientSocket != 0)
+				{
+					i--;
+				}
 		}
 	}
 	return 1;
