@@ -10,24 +10,33 @@ class MyServer
 {
 private:
 	SOCKET ServerSocket = NULL;
-	SOCKET ClientSocket = NULL;
+	SOCKET ServerSocketUDP = NULL;
 	vector<Session> Sessions;
-	string ActiveSessionName;
+	fd_set Readfds;
+	fd_set Writefds;
+	SOCKET max_sd = 0;
 
 public:
 	bool StartServer(char* addres, int host, int clientCount);
 	bool ClientAccept();
-	int ExecuteClientThread();
-	void CloseSocket();
+	int ServerProcess();
+	void CloseSocket(Session session);
 	~MyServer() 
 	{
-		closesocket(ClientSocket);
+		for(int i = 0; i < Sessions.size(); i++)
+		{
+			closesocket(Sessions[i].ClientSocket);
+		}
 		closesocket(ServerSocket);
 	}
 private:
 	Session* GetSession(string name = "");
-	int Execute(string message);
-	void AddSession(SOCKET socket);
-	void RemoveSession();
+	Session * GetSession(SOCKET socket);
+	int Execute(string message, SOCKET socket);
+	Session AddSession(SOCKET socket);
+	void RemoveSession(Session session);
 	int GetSessionIndex(string name);
+	bool InitSets();
+	int ExecuteClientRequest();
+	void ConnectCommand(Session session);
 };

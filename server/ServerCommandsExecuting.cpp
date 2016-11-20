@@ -25,7 +25,7 @@ int executeUpload(SOCKET socket, CommandParser param, Session* currentSession);
 int executeDownload(SOCKET socket, CommandParser param, Session* currentSession);
 
 
-int MyServer::Execute(string message) 
+int MyServer::Execute(string message, SOCKET socket) 
 {	
 	CommandParser cParser;
 	cParser.setMessage(message);
@@ -36,18 +36,21 @@ int MyServer::Execute(string message)
 	switch (mapping[command]) 
 	{
 	case getTime:
-		return executeTime(ClientSocket);
+		return executeTime(socket);
 	case echo:
-		return executeEcho(ClientSocket, cParser.getParam(1));
+		return executeEcho(socket, cParser.getParam(1));
 	case close:
-		RemoveSession();
-		return executeClose(ClientSocket);
+		if(GetSession(socket) != nullptr)
+		{
+			RemoveSession(GetSession(socket)[0]);
+		}
+		return executeClose(socket);
 	case upload:
-		return executeUpload(ClientSocket, cParser, GetSession());
+		return executeUpload(socket, cParser, GetSession());
 	case download:
-		return executeDownload(ClientSocket, cParser, GetSession());
+		return executeDownload(socket, cParser, GetSession());
 	default:
-		SendSocketMessage(ClientSocket, "Invalid command");
+		SendSocketMessage(socket, "Invalid command");
 		return 0;
 	}
 }

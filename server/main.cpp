@@ -64,12 +64,11 @@ int ServerMain()
 		{
 			try
 			{
-				server.ClientAccept();
-				server.ExecuteClientThread();
+				//server.ClientAccept();
+				server.ServerProcess();
 			}
 			catch (int ex)
 			{
-				server.CloseSocket();
 				ShowError(ex);
 			}
 		}
@@ -121,4 +120,3 @@ int ClientMain()
 	}
 	return 1;
 }
-

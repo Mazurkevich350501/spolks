@@ -3,11 +3,14 @@
 #include "CommandParser.h"
 #include <iostream>
 
+
 bool MyServer::StartServer(char* addres, int host, int clientCount) {
 	SOCKET	sServerListen;
+	SOCKET	sServerListenUDP;
 	struct sockaddr_in localaddr;
-
+	
 	sServerListen = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	sServerListenUDP = socket(AF_INET, SOCK_STREAM, IPPROTO_UDP);
 	if (sServerListen == SOCKET_ERROR)
 	{
 		throw -3;
@@ -27,7 +30,23 @@ bool MyServer::StartServer(char* addres, int host, int clientCount) {
 	cout << "Listen OK" << endl;
 
 	ServerSocket = sServerListen;
+	ServerSocketUDP = sServerListenUDP;
 	return true;
+}
+
+void MyServer::ConnectCommand(Session session)
+{
+	string message = session.IsSuccess
+		? ">"
+		: session.LastCommand;
+	if(session.IsSuccess)
+	{
+		SendSocketMessage(session.ClientSocket, message);
+	}
+	else
+	{
+		Execute(message, session.ClientSocket);
+	}
 }
 
 bool MyServer::ClientAccept()
@@ -41,35 +60,41 @@ bool MyServer::ClientAccept()
 	{
 		throw sClient;
 	}
-	ClientSocket = sClient;
-	AddSession(ClientSocket);
-	ShowMessage(string(string("Connect client ") += ActiveSessionName) += "\n");
+	Session session = AddSession(sClient);
+	ShowMessage(string(string("Connect client ") += session.Name) += "\n");
+	ConnectCommand(session);
+	
 	return true;
 }
 
-int MyServer::ExecuteClientThread()
+int MyServer::ServerProcess()
 {
-	Session* session = GetSession();
-	string message = ">";
-	if(session->IsSuccess)
-		SendSocketMessage(ClientSocket, message);
 	while(true)
 	{
-		message = !session->IsSuccess
-		? session->LastCommand
-		: ReadSocketMessage(ClientSocket);
-		int result = Execute(message);
-		if (result < 0) return result;
+		InitSets();
+		int activity = select(max_sd + 1, &Readfds, NULL, NULL, NULL);
+		if ((activity < 0) && (errno != EINTR))
+		{
+			ShowMessage("select error\n");
+		}
+		else
+		{
+			if (FD_ISSET(ServerSocket, &Readfds))
+			{
+				ClientAccept();
+				continue;
+			}
+			ExecuteClientRequest();
+		}
 	}
 }
 
-void MyServer::CloseSocket()
+void MyServer::CloseSocket(Session session)
 {
-	RemoveSession();
-	closesocket(ClientSocket);
+	RemoveSession(session);
 }
 
-void MyServer::AddSession(SOCKET socket)
+Session MyServer::AddSession(SOCKET socket)
 {	
 	struct sockaddr_in sin;
 	int len = sizeof(sin);
@@ -80,34 +105,49 @@ void MyServer::AddSession(SOCKET socket)
 		+= to_string(sin.sin_port);
 	if(GetSession(name) == nullptr)
 	{
-		ActiveSessionName = name;
 		// ReSharper disable once CppDeprecatedEntity
-		Session newSession(inet_ntoa(sin.sin_addr), sin.sin_port);
+		Session newSession(socket, inet_ntoa(sin.sin_addr), sin.sin_port);
 		Sessions.push_back(newSession);
+		return newSession;
 	}
+
+	return GetSession(name)[0];
 }
 
-void MyServer::RemoveSession()
+void MyServer::RemoveSession(Session session)
 {
-	if (GetSession(ActiveSessionName)->IsSuccess)
+	int index = GetSessionIndex(session.Name);
+	if (index != -1)
 	{
-		Session findSession(ActiveSessionName);
-		int index = GetSessionIndex(ActiveSessionName);
-		if (index != -1)
+		if(session.IsSuccess)
 		{
 			Sessions.erase(Sessions.begin() + index);
-			ShowMessage(string(string("Disconnect client ") += ActiveSessionName)  += "\n");
+			ShowMessage(string(string("Disconnect client ") += session.Name) += "\n");
 		}
-		ActiveSessionName = "";
+		else
+		{
+			GetSession(session.Name)->ClientSocket = 0;
+		}
 	}
 }
 
 Session* MyServer::GetSession(string name)
 {
-	if (name == "") name = ActiveSessionName;
 	for (int i = Sessions.size() - 1; i >= 0; i--)
 	{
 		if (Sessions[i].Name == name)
+		{
+			return &Sessions[i];
+		}
+	}
+	return nullptr;
+}
+
+Session* MyServer::GetSession(SOCKET socket)
+{
+	for (int i = Sessions.size() - 1; i >= 0; i--)
+	{
+		if (Sessions[i].ClientSocket == socket)
 		{
 			return &Sessions[i];
 		}
@@ -125,4 +165,67 @@ int MyServer::GetSessionIndex(string name)
 		}
 	}
 	return -1;
+}
+
+bool MyServer::InitSets()
+{
+	FD_ZERO(&Readfds);
+	FD_ZERO(&Writefds);
+	
+	FD_SET(ServerSocket, &Readfds);
+	max_sd = ServerSocket;
+	/*FD_SET(ServerSocketUDP, &Readfds);
+	if (ServerSocketUDP > max_sd)
+		max_sd = ServerSocketUDP;*/
+
+	for(int i = 0; i < Sessions.size(); i++)
+	{
+		SOCKET socket = Sessions[i].ClientSocket;
+		if(socket > 0)
+		{
+			auto set = !Sessions[i].IsSuccess && Sessions[i].LastCommand.find("download")
+				? &Writefds
+				: &Readfds;
+			FD_SET(socket, set);
+		}
+		if (socket > max_sd)
+			max_sd = socket;
+	}
+	return true;
+}
+
+int MyServer::ExecuteClientRequest()
+{
+	string message;
+	for (int i = 0; i < Sessions.size(); i++)
+	{
+		if (FD_ISSET(Sessions[i].ClientSocket, &Readfds))
+		{
+			if (Sessions[i].IsSuccess)
+			{
+				try
+				{
+					message = ReadSocketMessage(Sessions[i].ClientSocket);
+					Execute(message, Sessions[i].ClientSocket);
+				}catch(int ex)
+				{
+					CloseSocket(Sessions[i]);
+					if (i < Sessions.size())
+						if (Sessions[i].ClientSocket != 0)
+						{
+							i--;
+						}
+				}
+			}
+			else
+			{
+				//Readsss(Sessions[i]);
+			}
+		}
+		else if (FD_ISSET(Sessions[i].ClientSocket, &Writefds))
+		{
+			//Sendpaket(Sessions[i]);
+		}
+	}
+	return 1;
 }

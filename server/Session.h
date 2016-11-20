@@ -6,6 +6,7 @@ using namespace std;
 class Session
 {
 public:
+	SOCKET ClientSocket = NULL;
 	string Name;
 	string Ip;
 	int Port;
@@ -16,8 +17,9 @@ public:
 	bool IsSuccess;
 
 public:
-	explicit Session(string ip, int port = 0)
+	explicit Session(SOCKET socket, string ip, int port)
 	{
+		ClientSocket = socket;
 		Ip = ip;
 		Name = ip += string(":") += to_string(port);
 		Port = port;
@@ -31,7 +33,6 @@ public:
 	}
 	void setSessionData(string command, string filePath, int fileSize, int lastPosition)
 	{
-
 		Filepath = filePath;
 		FileSize = fileSize;
 		LastPosition = lastPosition;
