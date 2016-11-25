@@ -5,17 +5,18 @@
 
 void MyClient::StartCient(string serverIp, int serverPort)
 {
+	char serverAddres[20];
 	// ReSharper disable once CppDeprecatedEntity
 	strcpy(serverAddres, serverIp.c_str());
-	port = serverPort;
+	int port = serverPort;
 	struct hostent	*host;
 
-	server.sin_family = AF_INET;
-	server.sin_port = htons(port);
+	ServerSin.sin_family = AF_INET;
+	ServerSin.sin_port = htons(port);
 	// ReSharper disable once CppDeprecatedEntity
-	server.sin_addr.s_addr = inet_addr(serverAddres);
+	ServerSin.sin_addr.s_addr = inet_addr(serverAddres);
 
-	if (server.sin_addr.s_addr == INADDR_NONE)
+	if (ServerSin.sin_addr.s_addr == INADDR_NONE)
 	{
 		// ReSharper disable once CppDeprecatedEntity
 		host = gethostbyname(serverAddres);
@@ -24,14 +25,16 @@ void MyClient::StartCient(string serverIp, int serverPort)
 			ShowMessage("Unable to resolve server");
 			return;
 		}
-		CopyMemory(&server.sin_addr, host->h_addr_list[0],
+		CopyMemory(&ServerSin.sin_addr, host->h_addr_list[0],
 			host->h_length);
 	}
 }
 
-SOCKET CreateSocket()
+SOCKET CreateSocket(bool isTcp)
 {
-	SOCKET newSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	SOCKET newSocket = isTcp
+		? socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+		: socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (newSocket == INVALID_SOCKET)
 	{
 		ShowMessage("Can't create socket");
@@ -41,14 +44,24 @@ SOCKET CreateSocket()
 }
 
 bool MyClient::Connect()
-{
-	Socket = CreateSocket();
-	if (connect(Socket, reinterpret_cast<struct sockaddr *>(&server),
-		sizeof(server)) == SOCKET_ERROR)
+{	
+	int choice = 0;
+	while (choice < 1 || choice > 2)
+	{
+		cout << "Choice protocol:\n" << "1-tcp, 2-udp: ";
+		cin >> choice;
+		cin.ignore(INT_MAX, '\n');
+	}
+	Socket = CreateSocket(choice == 1);
+	if (connect(Socket, reinterpret_cast<struct sockaddr *>(&ServerSin),
+		sizeof(ServerSin)) == SOCKET_ERROR)
 	{
 		return false;
 	}
-
+	if(choice == 2)
+	{
+		SendSocketMessage(Socket, ServerSin, "connect\r\n");
+	}
 	return true;
 }
 
@@ -79,6 +92,6 @@ bool MyClient::Reconnect()
 int MyClient::Execute() const
 {
 	string message;
-	message = ReadSocketMessage(Socket);
+	message = ReadSocketMessage(Socket, ServerSin);
 	return  ExecuteCommand(message);
 }

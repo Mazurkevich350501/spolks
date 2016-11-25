@@ -4,7 +4,7 @@
 #include <map>
 #include <time.h>
 
-enum commands {getTime = 1, echo, close, upload, download};
+enum commands {getTime = 1, echo, close, upload, download, connectMe};
 
 map<string, commands> CommandMapping() {
 	map<string, commands> mapping;
@@ -14,18 +14,19 @@ map<string, commands> CommandMapping() {
 	mapping["close"] = close;
 	mapping["upload"] = upload;
 	mapping["download"] = download;
+	mapping["connect"] = connectMe;
 
 	return mapping;
 }
 
-int executeTime(SOCKET socket);
-int executeEcho(SOCKET socket, string param);
-int executeClose(SOCKET socket);
+int executeTime(SOCKET socket, Session session);
+int executeEcho(SOCKET socket, Session session, string param);
+int executeClose(SOCKET socket, Session session);
 int executeUpload(SOCKET socket, CommandParser param, Session* currentSession);
 int executeDownload(SOCKET socket, CommandParser param, Session* currentSession);
 
 
-int MyServer::Execute(string message, SOCKET socket) 
+int MyServer::Execute(string message, SOCKET socket, Session* session) 
 {	
 	CommandParser cParser;
 	cParser.setMessage(message);
@@ -36,26 +37,29 @@ int MyServer::Execute(string message, SOCKET socket)
 	switch (mapping[command]) 
 	{
 	case getTime:
-		return executeTime(socket);
+		return executeTime(socket, session[0]);
 	case echo:
-		return executeEcho(socket, cParser.getParam(1));
+		return executeEcho(socket, session[0], cParser.getParam(1));
 	case close:
 		if(GetSession(socket) != nullptr)
 		{
-			RemoveSession(GetSession(socket)[0]);
+			RemoveSession(session[0]);
 		}
-		return executeClose(socket);
+		return executeClose(socket, session[0]);
 	case upload:
-		return executeUpload(socket, cParser, GetSession(socket));
+		return executeUpload(socket, cParser, session);
 	case download:
-		return executeDownload(socket, cParser, GetSession(socket));
+		return executeDownload(socket, cParser, session);
+	case connectMe:
+		SendSocketMessage(socket, session[0].Sin, ">");
+		return 0;
 	default:
-		SendSocketMessage(socket, "Invalid command");
+		SendSocketMessage(socket, session[0].Sin, "Invalid command");
 		return 0;
 	}
 }
 
-int executeTime(SOCKET socket)
+int executeTime(SOCKET socket, Session session)
 {
 	time_t     now = time(0);
 	struct tm  tstruct;
@@ -65,19 +69,19 @@ int executeTime(SOCKET socket)
 	strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
 	string currentTime = buf;
 
-	SendSocketMessage(socket, currentTime);
+	SendSocketMessage(socket, session.Sin, currentTime);
 	return 1;
 }
 
-int executeEcho(SOCKET socket, string param)
+int executeEcho(SOCKET socket, Session session, string param)
 {
-	SendSocketMessage(socket, param);
+	SendSocketMessage(socket, session.Sin, param);
 	return 1;
 }
 
-int executeClose(SOCKET socket)
+int executeClose(SOCKET socket, Session session)
 {
-	SendSocketMessage(socket, "close clientSocket");
+	SendSocketMessage(socket, session.Sin, "close clientSocket");
 	return -1;
 }
 
@@ -94,9 +98,13 @@ int executeUpload(SOCKET socket, CommandParser params, Session* currentSession)
 {
 	int startPosition = FileSize(params.getParam(1));
 	string message = createStartTransmitMessage("startUpload", params.getParam(1), stoi(params.getParam(2)), startPosition);
-	SendSocketMessage(socket, message);
-	message = ReadSocketMessage(socket);
-	currentSession->setSessionData("upload", params.getParam(1), stoi(params.getParam(2)), startPosition);
+	SendSocketMessage(socket, currentSession->Sin, message);
+	message = ReadSocketMessage(socket, currentSession->Sin);
+	if(message == "success\r\n")
+	{
+		currentSession->setSessionData("upload", params.getParam(1), stoi(params.getParam(2)), startPosition);
+	}
+	SendSocketMessage(socket, currentSession->Sin, message);
 	return 1;
 }
 
@@ -108,16 +116,17 @@ int executeDownload(SOCKET socket, CommandParser params, Session* currentSession
 	{
 		string message = createStartTransmitMessage("startDownload", params.getParam(1), 
 			fileSize, startPosition);
-		SendSocketMessage(socket, message);
-		message = ReadSocketMessage(socket);
-		if(message != "success\r\n")
+		SendSocketMessage(socket, currentSession->Sin, message);
+		message = ReadSocketMessage(socket, currentSession->Sin);
+		if(message == "success\r\n")
 		{
-			startPosition = stoi(message);
+			return 1;
 		}
+		startPosition = stoi(message);
 	}
 	else
 	{
-		SendSocketMessage(socket, "error");
+		SendSocketMessage(socket, currentSession->Sin, "error");
 		return 0;
 	}
 	currentSession->setSessionData("download", params.getParam(1), fileSize, startPosition);

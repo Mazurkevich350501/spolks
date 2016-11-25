@@ -18,13 +18,15 @@ int FileSize(string filePath)
 	return result < 0 ? 0 : result;
 }
 
-string ReadSocketMessage(SOCKET socket)
+string ReadSocketMessage(SOCKET boundSocket, struct sockaddr_in fromAddr)
 {
 	string message = "";
 	char recvBuffer[messageBufferLength];
+	int fromLength = sizeof(fromAddr);
 	while (message.find("\r\n") == -1)
 	{
-		int ret = recv(socket, recvBuffer, messageBufferLength, 0);
+		int ret = recvfrom(boundSocket, recvBuffer, messageBufferLength, 0,
+			reinterpret_cast<sockaddr *>(&fromAddr), &fromLength);
 		if (ret == SOCKET_ERROR)
 		{
 			throw ret;
@@ -35,22 +37,23 @@ string ReadSocketMessage(SOCKET socket)
 	return message;
 }
 
-int SendSocketMessage(SOCKET socket, string message)
+int SendSocketMessage(SOCKET boundSocket, struct sockaddr_in toAddr, string message)
 {
 	message.append("\r\n");
 	char sendMessage[messageBufferLength];
 	// ReSharper disable once CppDeprecatedEntity
 	strcpy(sendMessage, message.c_str());
-	int ret = send(socket, sendMessage, strlen(sendMessage), 0);
+	int ret = sendto(boundSocket, sendMessage, strlen(sendMessage), 0, 
+		reinterpret_cast<sockaddr *>(&toAddr), sizeof(toAddr));
 	if (ret == SOCKET_ERROR)
 		throw ret;
 	return ret;
 }
 
-int SendPackage(SOCKET socket, char* package, int size)
+int SendPackage(SOCKET socket, sockaddr_in toAddr, char* package, int size)
 {
-	int ret = send(socket, package, size, 0);
-	return ret;
+	return sendto(socket, package, size, 0, 
+		reinterpret_cast<sockaddr*>(&toAddr), sizeof(toAddr));
 }
 
 int SendSocketPackege(Session &session)
@@ -66,7 +69,7 @@ int SendSocketPackege(Session &session)
 		int sendSize = session.FileSize - session.LastPosition < packageLength
 			? session.FileSize - session.LastPosition
 			: packageLength;
-		int ret = SendPackage(session.ClientSocket, package, sendSize);
+		int ret = SendPackage(session.ClientSocket, session.Sin, package, sendSize);
 		if (ret == SOCKET_ERROR)
 		{
 			file.close();
@@ -79,18 +82,15 @@ int SendSocketPackege(Session &session)
 	if(session.LastPosition == session.FileSize)
 	{
 		session.clearSessionData();
-		string message = ReadSocketMessage(session.ClientSocket);
-		SendSocketMessage(session.ClientSocket, message);
+		string message = ReadSocketMessage(session.ClientSocket, session.Sin);
+		SendSocketMessage(session.ClientSocket, session.Sin, message);
 		return message == "success\r\n" ? 1 : 0;
 	}
 	return 1;
 }
 
-int SendFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)
+int SendFile(SOCKET socket, sockaddr_in toAddr, string filePath, int fileSize, int startPosition)
 { 
-	if (currentSession != nullptr)
-		currentSession->setSessionData("download", filePath, fileSize, startPosition);
-
 	fstream file;
 	file.open(filePath, ios::in | ios::binary | ios::ate);
 	if (!file.is_open()) return -1;
@@ -105,25 +105,23 @@ int SendFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 	{
 		int sendSize = nSendSize < packageLength ? nSendSize : packageLength;
 		file.read(package, packageLength);
-		int ret = SendPackage(socket, package, sendSize);
+		int ret = SendPackage(socket, toAddr, package, sendSize);
 		if (ret == SOCKET_ERROR)
 		{
 			file.close();
 			throw ret;
 		}
 		nSendSize -= ret;
-		if (currentSession != nullptr)
-			currentSession->LastPosition += ret;
 	}
 	file.close();
-	if (currentSession != nullptr)
-		currentSession->clearSessionData();
 	return 1;
 }
 
-int ReadPackege(SOCKET socket, char* package)
+int ReadPackege(SOCKET socket, sockaddr_in fromAddr, char* package)
 {
-	return recv(socket, package, packageLength, 0);
+	int fromLen = sizeof(fromAddr);
+	return recvfrom(socket, package, packageLength, 0, 
+		reinterpret_cast<sockaddr*>(&fromAddr), &fromLen);
 }
 
 int ReadSocketPackege(Session &session)
@@ -136,7 +134,7 @@ int ReadSocketPackege(Session &session)
 	file.seekg(session.LastPosition, ios_base::end);
 	if(session.LastPosition < session.FileSize)
 	{
-		int ret = ReadPackege(session.ClientSocket, package);
+		int ret = ReadPackege(session.ClientSocket, session.Sin, package);
 		if (ret == SOCKET_ERROR)
 		{
 			file.close();
@@ -151,16 +149,13 @@ int ReadSocketPackege(Session &session)
 	if(session.LastPosition == session.FileSize)
 	{
 		session.clearSessionData();
-		SendSocketMessage(session.ClientSocket, "success");
+		SendSocketMessage(session.ClientSocket, session.Sin, "success");
 	}
 	return 1;
 }
 
-int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Session* currentSession)
+int ReadFile(SOCKET socket, sockaddr_in fromAddr, string filePath, int fileSize, int startPosition)
 {
-	if (currentSession != nullptr)
-		currentSession->setSessionData("upload", filePath, fileSize, startPosition);
-	
 	fstream file;
 	file.open(filePath, ios::out | ios::binary | ios::ate);
 	if (!file.is_open()) return -1;
@@ -170,7 +165,7 @@ int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 	file.seekg(startPosition, ios_base::end);
 	while (downloadSize < fileSize)
 	{
-		int ret = ReadPackege(socket, package);
+		int ret = ReadPackege(socket, fromAddr, package);
 		if (ret == SOCKET_ERROR)
 		{
 			file.close();
@@ -180,11 +175,7 @@ int ReadFile(SOCKET socket, string filePath, int fileSize, int startPosition, Se
 		downloadSize += ret;
 		ShowMessage(string(to_string(downloadSize)) += string(" : ") 
 			+= to_string(fileSize) += "\n");
-		if (currentSession != nullptr)
-			currentSession->LastPosition = downloadSize;
 	}
 	file.close();
-	if (currentSession != nullptr)
-		currentSession->clearSessionData();
 	return 1;
 }

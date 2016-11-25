@@ -7,16 +7,9 @@ using namespace std;
 
 class MyClient
 {
-private:
-	struct sockaddr_in server;
-	SOCKET Socket = NULL;
-	char serverAddres[17];
-	int port;
-
 public:
-	MyClient(): port(0)
-	{
-	}
+	struct sockaddr_in ServerSin;
+	SOCKET Socket = NULL;
 
 	void StartCient(string addres, int host);
 	bool Connect();

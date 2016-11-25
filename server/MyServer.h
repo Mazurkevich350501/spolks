@@ -9,8 +9,8 @@ using namespace std;
 class MyServer 
 {
 private:
-	SOCKET ServerSocket = NULL;
-	SOCKET ServerSocketUDP = NULL;
+	SOCKET ServerSocketTcp = NULL;
+	SOCKET ServerSocketUdp = NULL;
 	vector<Session> Sessions;
 	fd_set Readfds;
 	fd_set Writefds;
@@ -27,16 +27,19 @@ public:
 		{
 			closesocket(Sessions[i].ClientSocket);
 		}
-		closesocket(ServerSocket);
+		closesocket(ServerSocketTcp);
+		closesocket(ServerSocketUdp);
 	}
 private:
 	Session* GetSession(string name = "");
 	Session * GetSession(SOCKET socket);
-	int Execute(string message, SOCKET socket);
-	Session AddSession(SOCKET socket);
+	int Execute(string message, SOCKET socket, Session* session);
+	Session* AddSession(SOCKET socket);
+	Session* AddSession(sockaddr_in sin);
 	void RemoveSession(Session session);
 	int GetSessionIndex(string name);
 	bool InitSets();
-	int ExecuteClientRequest();
-	void ConnectCommand(Session session);
+	int ExecuteTcpClientRequest();
+	int ExecuteUdpClientRequest();
+	void ConnectCommand(Session* session);
 };

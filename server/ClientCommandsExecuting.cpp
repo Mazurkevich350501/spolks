@@ -5,10 +5,10 @@
 #include <iostream>
 
 
-int Upload(SOCKET socket, CommandParser params);
-int Download(SOCKET socket, CommandParser params);
-int CloseClient(SOCKET socket, int CommandCount, string message);
-int TypeCommand(SOCKET socket);
+int Upload(const MyClient* client, CommandParser params);
+int Download(const MyClient* client, CommandParser params);
+int CloseClient(const MyClient* client, int CommandCount, string message);
+int TypeCommand(const MyClient* client);
 
 
 enum sendCommands 
@@ -44,54 +44,57 @@ int MyClient::ExecuteCommand(string message) const
 	switch (mapping[command])
 	{
 	case startUpload:
-		return Upload(Socket, commandParcer);
+		return Upload(this, commandParcer);
 	case startDownload:
-		return Download(Socket, commandParcer);
+		return Download(this, commandParcer);
 	case close:
-		return CloseClient(Socket, commandParcer.getParamsCount(), message);
+		return CloseClient(this, commandParcer.getParamsCount(), message);
 	case error:
 	case success:
 		ShowMessage(message);
 	case typeCommand:
-		return TypeCommand(Socket);
+		return TypeCommand(this);
 	default:
 		ShowMessage(message);
-		return TypeCommand(Socket);
+		return TypeCommand(this);
 	}
 }
 
-int Upload(SOCKET socket, CommandParser params)
+int Upload(const MyClient* client, CommandParser params)
 {
 	string filePath = params.getParam(1);
 	int fileSize = FileSize(filePath);
 
-	if (fileSize)
+	if (fileSize != 0 && fileSize > stoi(params.getParam(3)))
 	{
-		SendSocketMessage(socket, "success");
-		int result = SendFile(socket, filePath, stoi(params.getParam(2)), stoi(params.getParam(3)), NULL);
+		SendSocketMessage(client->Socket, client->ServerSin, "success");
+		int result = SendFile(client->Socket, client->ServerSin,filePath, stoi(params.getParam(2)), stoi(params.getParam(3)));
 		return result;
 	}
 	else
 	{
-		SendSocketMessage(socket, "error");
+		SendSocketMessage(client->Socket, client->ServerSin, "error");
 		return 0;
 	}
 }
 
-int Download(SOCKET socket, CommandParser params)
+int Download(const MyClient* client, CommandParser params)
 {
 	int fileSize = FileSize(params.getParam(1));
-	SendSocketMessage(socket, fileSize > 0 ? to_string(fileSize) : "success");
-	int result = ReadFile(socket, params.getParam(1), stoi(params.getParam(2)), fileSize, nullptr);
-	SendSocketMessage(socket, result > 0 ? "success" : "error");
+	bool isDownload = fileSize == stoi(params.getParam(3)) && fileSize != 0;
+	SendSocketMessage(client->Socket, client->ServerSin, !isDownload ? to_string(fileSize) : "success");
+	if (isDownload)
+		return 1; 
+	int result = ReadFile(client->Socket, client->ServerSin, params.getParam(1), stoi(params.getParam(2)), fileSize);
+	SendSocketMessage(client->Socket, client->ServerSin, result > 0 ? "success" : "error");
 	return result;
 }
 
-int CloseClient(SOCKET socket, int CommandCount, string message)
+int CloseClient(const MyClient* client, int CommandCount, string message)
 {
 	if (CommandCount > 0) return -1;
 	ShowMessage(message);
-	return TypeCommand(socket);
+	return TypeCommand(client);
 }
 
 string AddingMessage(string message)
@@ -111,11 +114,11 @@ string AddingMessage(string message)
 	return message;
 }
 
-int TypeCommand(SOCKET socket)
+int TypeCommand(const MyClient* client)
 {
 	ShowMessage(">");
 	string message;
 	getline(cin, message);
-	SendSocketMessage(socket, AddingMessage(message));
+	SendSocketMessage(client->Socket, client->ServerSin, AddingMessage(message));
 	return 1;
 }

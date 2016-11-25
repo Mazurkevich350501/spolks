@@ -4,23 +4,22 @@
 #include <iostream>
 
 
-bool MyServer::StartServer(char* addres, int host, int clientCount) {
-	SOCKET	sServerListen;
-	SOCKET	sServerListenUDP;
+bool MyServer::StartServer(char* addres, int hostTcp, int clientCount) {
+	SOCKET sServerListen = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	SOCKET sServerListenUdp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	struct sockaddr_in localaddr;
 	
-	sServerListen = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	sServerListenUDP = socket(AF_INET, SOCK_STREAM, IPPROTO_UDP);
-	if (sServerListen == SOCKET_ERROR)
+	if (sServerListen == SOCKET_ERROR || sServerListenUdp == SOCKET_ERROR)
 	{
 		throw -3;
 	}
 	// ReSharper disable once CppDeprecatedEntity
 	localaddr.sin_addr.s_addr = inet_addr(addres);
 	localaddr.sin_family = AF_INET;
-	localaddr.sin_port = htons(host);
+	localaddr.sin_port = htons(hostTcp);
 
-	if (bind(sServerListen, reinterpret_cast<struct sockaddr *>(&localaddr), sizeof(localaddr)) == SOCKET_ERROR)
+	if (bind(sServerListenUdp, reinterpret_cast<struct sockaddr *>(&localaddr), sizeof(localaddr)) == SOCKET_ERROR
+		|| bind(sServerListen, reinterpret_cast<struct sockaddr *>(&localaddr), sizeof(localaddr)) == SOCKET_ERROR)
 	{
 		throw -4;
 	}
@@ -29,23 +28,23 @@ bool MyServer::StartServer(char* addres, int host, int clientCount) {
 	listen(sServerListen, clientCount);
 	cout << "Listen OK" << endl;
 
-	ServerSocket = sServerListen;
-	ServerSocketUDP = sServerListenUDP;
+	ServerSocketTcp = sServerListen;
+	ServerSocketUdp = sServerListenUdp;
 	return true;
 }
 
-void MyServer::ConnectCommand(Session session)
+void MyServer::ConnectCommand(Session* session)
 {
-	string message = session.IsSuccess
+	string message = session->IsSuccess
 		? ">"
-		: session.LastCommand;
-	if(session.IsSuccess)
+		: session->LastCommand;
+	if(session->IsSuccess)
 	{
-		SendSocketMessage(session.ClientSocket, message);
+		SendSocketMessage(session->ClientSocket, session->Sin, message);
 	}
 	else
 	{
-		Execute(message, session.ClientSocket);
+		Execute(message, session->ClientSocket, session);
 	}
 }
 
@@ -55,13 +54,13 @@ bool MyServer::ClientAccept()
 	struct sockaddr_in clientaddr;
 	int iSize = sizeof(clientaddr);
 
-	sClient = accept(ServerSocket, reinterpret_cast<struct sockaddr *>(&clientaddr), &iSize);
+	sClient = accept(ServerSocketTcp, reinterpret_cast<struct sockaddr *>(&clientaddr), &iSize);
 	if (sClient == INVALID_SOCKET)
 	{
 		throw sClient;
 	}
-	Session session = AddSession(sClient);
-	ShowMessage(string(string("Connect client ") += session.Name) += "\n");
+	Session* session = AddSession(sClient);
+	ShowMessage(string(string("Connect client ") += session->Name) += "\n");
 	ConnectCommand(session);
 	
 	return true;
@@ -74,7 +73,7 @@ int MyServer::ServerProcess()
 		InitSets();
 		timeval tv;
 		tv.tv_sec = 0;
-		tv.tv_usec = 30;
+		tv.tv_usec = 5;
 		int activity = select(max_sd + 1, &Readfds, NULL, NULL, &tv);
 		if ((activity < 0) && (errno != EINTR))
 		{
@@ -82,12 +81,17 @@ int MyServer::ServerProcess()
 		}
 		else
 		{
-			if (FD_ISSET(ServerSocket, &Readfds))
+			if (FD_ISSET(ServerSocketTcp, &Readfds))
 			{
 				ClientAccept();
 				continue;
 			}
-			ExecuteClientRequest();
+			if (FD_ISSET(ServerSocketUdp, &Readfds))
+			{
+				ExecuteUdpClientRequest();
+				continue;
+			}
+			ExecuteTcpClientRequest();
 		}
 	}
 }
@@ -97,25 +101,36 @@ void MyServer::CloseSocket(Session session)
 	RemoveSession(session);
 }
 
-Session MyServer::AddSession(SOCKET socket)
+Session* MyServer::AddSession(SOCKET socket)
 {	
-	struct sockaddr_in sin;
-	int len = sizeof(sin);
-	if (getsockname(socket, reinterpret_cast<struct sockaddr *>(&sin), &len) == -1)
-		throw -3;
-	// ReSharper disable once CppDeprecatedEntity
-	string name = string(string(inet_ntoa(sin.sin_addr)) += ":")
-		+= to_string(sin.sin_port);
+	string name = GetSessionName(socket);
 	auto session = GetSession(name);
 	if(session == nullptr)
 	{
 		// ReSharper disable once CppDeprecatedEntity
-		Session newSession(socket, inet_ntoa(sin.sin_addr), sin.sin_port);
+		Session newSession(socket);
 		Sessions.push_back(newSession);
-		return newSession;
+		return GetSession(name);
 	}
-	session->ClientSocket = socket;
-	return GetSession(name)[0];
+	session->setSocket(socket);
+	return session;
+}
+
+Session* MyServer::AddSession(sockaddr_in sin)
+{
+	string name = GetSessionName(sin);
+	auto session = GetSession(name);
+	if (session == nullptr)
+	{
+		// ReSharper disable once CppDeprecatedEntity
+		Session newSession(sin);
+		Sessions.push_back(newSession);
+		session = GetSession(name);
+		session->ClientSocket = ServerSocketUdp;
+		return session;
+	}
+	session->Sin = sin;
+	return session;
 }
 
 void MyServer::RemoveSession(Session session)
@@ -177,11 +192,11 @@ bool MyServer::InitSets()
 	FD_ZERO(&Readfds);
 	FD_ZERO(&Writefds);
 	
-	FD_SET(ServerSocket, &Readfds);
-	max_sd = ServerSocket;
-	/*FD_SET(ServerSocketUDP, &Readfds);
-	if (ServerSocketUDP > max_sd)
-		max_sd = ServerSocketUDP;*/
+	FD_SET(ServerSocketTcp, &Readfds);
+	max_sd = ServerSocketTcp;
+	FD_SET(ServerSocketUdp, &Readfds);
+	if (ServerSocketUdp > max_sd)
+		max_sd = ServerSocketUdp;
 
 	for(int i = 0; i < Sessions.size(); i++)
 	{
@@ -199,7 +214,7 @@ bool MyServer::InitSets()
 	return true;
 }
 
-int MyServer::ExecuteClientRequest()
+int MyServer::ExecuteTcpClientRequest()
 {
 	string message;
 	for (int i = 0; i < Sessions.size(); i++)
@@ -210,8 +225,8 @@ int MyServer::ExecuteClientRequest()
 			{
 				if (Sessions[i].IsSuccess)
 				{
-					message = ReadSocketMessage(Sessions[i].ClientSocket);
-					Execute(message, Sessions[i].ClientSocket);
+					message = ReadSocketMessage(Sessions[i].ClientSocket, Sessions[i].Sin);
+					Execute(message, Sessions[i].ClientSocket, GetSession(Sessions[i].Name));
 				}
 				else
 				{
@@ -223,7 +238,7 @@ int MyServer::ExecuteClientRequest()
 				SendSocketPackege(Sessions[i]);
 			}
 		}
-		catch (int ex)
+		catch (int)
 		{
 			CloseSocket(Sessions[i]);
 			if (i < Sessions.size())
@@ -232,6 +247,29 @@ int MyServer::ExecuteClientRequest()
 					i--;
 				}
 		}
+	}
+	return 1;
+}
+
+int MyServer::ExecuteUdpClientRequest()
+{
+	string message;
+	sockaddr_in sin;
+	int sinLength = sizeof(sin);
+	int ret = recvfrom(ServerSocketUdp, NULL, 0, MSG_PEEK,
+		reinterpret_cast<sockaddr *>(&sin), &sinLength);
+	Session* session = AddSession(sin);
+	try
+	{		
+		if (session->IsSuccess)
+		{
+			message = ReadSocketMessage(ServerSocketUdp, session->Sin);
+			Execute(message, ServerSocketUdp, session);
+		}
+	}
+	catch (int)
+	{
+		CloseSocket(session[0]);
 	}
 	return 1;
 }
