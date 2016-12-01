@@ -149,11 +149,13 @@
     <ClCompile Include="ServerCommandsExecuting.cpp" />
     <ClCompile Include="MyServer.cpp" />
     <ClCompile Include="SocketCommands.cpp" />
+    <ClCompile Include="SocketUdpCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CommandParser.h" />
     <ClInclude Include="MyClient.h" />
     <ClInclude Include="MyServer.h" />
+    <ClInclude Include="Package.h" />
     <ClInclude Include="Session.h" />
     <ClInclude Include="SocketCommands.h" />
   </ItemGroup>

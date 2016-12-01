@@ -58,8 +58,10 @@ bool MyClient::Connect()
 	{
 		return false;
 	}
+	IsUdp = false;
 	if(choice == 2)
 	{
+		IsUdp = true;
 		SendSocketMessage(Socket, ServerSin, "connect\r\n");
 	}
 	return true;

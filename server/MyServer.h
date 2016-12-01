@@ -40,6 +40,6 @@ private:
 	int GetSessionIndex(string name);
 	bool InitSets();
 	int ExecuteTcpClientRequest();
-	int ExecuteUdpClientRequest();
+	int ExecuteUdpClientRequest(bool isRead);
 	void ConnectCommand(Session* session);
 };

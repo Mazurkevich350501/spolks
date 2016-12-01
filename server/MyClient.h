@@ -8,8 +8,9 @@ using namespace std;
 class MyClient
 {
 public:
-	struct sockaddr_in ServerSin;
+	sockaddr_in ServerSin;
 	SOCKET Socket = NULL;
+	bool IsUdp = false;
 
 	void StartCient(string addres, int host);
 	bool Connect();

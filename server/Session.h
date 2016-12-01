@@ -26,15 +26,34 @@ class Session
 public:
 	SOCKET ClientSocket = NULL;
 	string Name;
-	struct sockaddr_in Sin;
+	sockaddr_in Sin;
 	string LastCommand;
 	string FilePath;
 	int FileSize;
 	int LastPosition;
 	bool IsSuccess;
 	bool isUdp;
+	bool isAwaitPackage = false;
+	char* ReadBuffer = NULL;
+	int ReadBufferLength = 0;
+	int BufferStartPosition = 0;
+	const int MaxReadBufferLength = 20000000;
 
 public:
+	Session &operator=(Session &a)
+	{
+		Session session = a;
+		session.ReadBuffer = a.ReadBuffer;
+		return session;
+	}
+	bool IsDownload() const
+	{
+		return LastCommand.find("download") != -1;
+	}
+	bool IsUpload() const
+	{
+		return LastCommand.find("upload") != -1;
+	}
 	explicit Session(SOCKET socket)
 	{
 		ClientSocket = socket;
@@ -56,6 +75,9 @@ public:
 		FileSize = LastPosition = 0;
 		IsSuccess = true;
 		LastCommand = "";
+		if (ReadBuffer != NULL)
+			delete[]ReadBuffer;
+		ReadBuffer = NULL;
 	}
 	void setSessionData(string command, string filePath, int fileSize, int lastPosition)
 	{
@@ -64,6 +86,7 @@ public:
 		LastPosition = lastPosition;
 		createLastCommand(command);
 		IsSuccess = false;
+		ReadBuffer = new char[MaxReadBufferLength];
 	}
 	void setSocket(SOCKET socket)
 	{

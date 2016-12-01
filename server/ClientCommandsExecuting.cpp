@@ -68,7 +68,19 @@ int Upload(const MyClient* client, CommandParser params)
 	if (fileSize != 0 && fileSize > stoi(params.getParam(3)))
 	{
 		SendSocketMessage(client->Socket, client->ServerSin, "success");
-		int result = SendFile(client->Socket, client->ServerSin,filePath, stoi(params.getParam(2)), stoi(params.getParam(3)));
+		int result;
+		if (client->IsUdp)
+		{
+			Session session(client->Socket);
+			session.Sin = client->ServerSin;
+
+			session.setSessionData("upload", params.getParam(1), stoi(params.getParam(2)), stoi(params.getParam(3)));
+			result = Udp::SendFile(session);
+		}
+		else
+		{
+			result = SendFile(client->Socket, client->ServerSin, filePath, stoi(params.getParam(2)), stoi(params.getParam(3)));
+		}
 		return result;
 	}
 	else
@@ -85,7 +97,19 @@ int Download(const MyClient* client, CommandParser params)
 	SendSocketMessage(client->Socket, client->ServerSin, !isDownload ? to_string(fileSize) : "success");
 	if (isDownload)
 		return 1; 
-	int result = ReadFile(client->Socket, client->ServerSin, params.getParam(1), stoi(params.getParam(2)), fileSize);
+	int result;
+	if(client->IsUdp)
+	{
+		Session session(client->Socket);
+		session.Sin = client->ServerSin;
+
+		session.setSessionData("download", params.getParam(1), stoi(params.getParam(2)), fileSize);
+		result = Udp::ReadFile(session);
+	}
+	else
+	{
+		result = ReadFile(client->Socket, client->ServerSin, params.getParam(1), stoi(params.getParam(2)), fileSize);
+	}
 	SendSocketMessage(client->Socket, client->ServerSin, result > 0 ? "success" : "error");
 	return result;
 }

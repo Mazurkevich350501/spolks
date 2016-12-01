@@ -4,7 +4,7 @@
 #include <fstream>
 
 #define messageBufferLength 1024
-#define packageLength 200000
+#define packageLength 800000
 
 void ShowMessage(string message)
 {
@@ -69,13 +69,13 @@ int SendSocketPackege(Session &session)
 		int sendSize = session.FileSize - session.LastPosition < packageLength
 			? session.FileSize - session.LastPosition
 			: packageLength;
+		file.read(package, sendSize);
 		int ret = SendPackage(session.ClientSocket, session.Sin, package, sendSize);
 		if (ret == SOCKET_ERROR)
 		{
 			file.close();
 			throw ret;
 		}
-		file.write(package, ret);
 		session.LastPosition += ret;
 		file.close();
 	}

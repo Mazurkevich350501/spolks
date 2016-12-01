@@ -2,6 +2,7 @@
 #include "SocketCommands.h"
 #include "CommandParser.h"
 #include <iostream>
+#include "Package.h"
 
 
 bool MyServer::StartServer(char* addres, int hostTcp, int clientCount) {
@@ -73,7 +74,7 @@ int MyServer::ServerProcess()
 		InitSets();
 		timeval tv;
 		tv.tv_sec = 0;
-		tv.tv_usec = 5;
+		tv.tv_usec = 0;
 		int activity = select(max_sd + 1, &Readfds, NULL, NULL, &tv);
 		if ((activity < 0) && (errno != EINTR))
 		{
@@ -88,10 +89,10 @@ int MyServer::ServerProcess()
 			}
 			if (FD_ISSET(ServerSocketUdp, &Readfds))
 			{
-				ExecuteUdpClientRequest();
-				continue;
+				ExecuteUdpClientRequest(true);
 			}
-			ExecuteTcpClientRequest();
+			ExecuteTcpClientRequest();	
+			ExecuteUdpClientRequest(false);
 		}
 	}
 }
@@ -203,7 +204,7 @@ bool MyServer::InitSets()
 		SOCKET socket = Sessions[i].ClientSocket;
 		if(socket > 0)
 		{
-			auto set = !Sessions[i].IsSuccess && Sessions[i].LastCommand.find("download") != -1
+			auto set = !Sessions[i].IsSuccess && Sessions[i].IsDownload()
 				? &Writefds
 				: &Readfds;
 			FD_SET(socket, set);
@@ -221,22 +222,23 @@ int MyServer::ExecuteTcpClientRequest()
 	{
 		try
 		{
-			if (FD_ISSET(Sessions[i].ClientSocket, &Readfds))
-			{
-				if (Sessions[i].IsSuccess)
+			if(!Sessions[i].isUdp)
+				if (FD_ISSET(Sessions[i].ClientSocket, &Readfds))
 				{
-					message = ReadSocketMessage(Sessions[i].ClientSocket, Sessions[i].Sin);
-					Execute(message, Sessions[i].ClientSocket, GetSession(Sessions[i].Name));
+					if (Sessions[i].IsSuccess)
+					{
+						message = ReadSocketMessage(Sessions[i].ClientSocket, Sessions[i].Sin);
+						Execute(message, Sessions[i].ClientSocket, GetSession(Sessions[i].Name));
+					}
+					else
+					{
+						ReadSocketPackege(Sessions[i]);
+					}
 				}
-				else
+				else if (FD_ISSET(Sessions[i].ClientSocket, &Writefds))
 				{
-					ReadSocketPackege(Sessions[i]);
+					SendSocketPackege(Sessions[i]);
 				}
-			}
-			else if (FD_ISSET(Sessions[i].ClientSocket, &Writefds))
-			{
-				SendSocketPackege(Sessions[i]);
-			}
 		}
 		catch (int)
 		{
@@ -251,25 +253,65 @@ int MyServer::ExecuteTcpClientRequest()
 	return 1;
 }
 
-int MyServer::ExecuteUdpClientRequest()
+sockaddr_in getSin(SOCKET ServerSocketUdp)
 {
 	string message;
 	sockaddr_in sin;
 	int sinLength = sizeof(sin);
-	int ret = recvfrom(ServerSocketUdp, NULL, 0, MSG_PEEK,
+	recvfrom(ServerSocketUdp, NULL, 0, MSG_PEEK,
 		reinterpret_cast<sockaddr *>(&sin), &sinLength);
-	Session* session = AddSession(sin);
+	return sin;
+}
+
+int MyServer::ExecuteUdpClientRequest(bool isRead)
+{
 	try
-	{		
-		if (session->IsSuccess)
+	{	
+		if(isRead)
 		{
-			message = ReadSocketMessage(ServerSocketUdp, session->Sin);
-			Execute(message, ServerSocketUdp, session);
+			string message;
+			sockaddr_in sin = getSin(ServerSocketUdp);
+			Session* session = AddSession(sin);
+			if (session->IsUpload())
+			{
+				Udp::ReadSocketPackege(session[0]);
+			}
+			else if(session->IsDownload())
+			{
+				CommandParser parser;
+				message = ReadSocketMessage(ServerSocketUdp, session->Sin);
+				parser.setMessage(message);
+				if (parser.getCommand() == "lastPosition")
+				{
+					cout << "LastPosition: " << parser.getParam(1) << " | " 
+					<< (float)(atoi(parser.getParam(1).c_str())/MAX_DATA_LENGTH) << endl;
+					session->LastPosition = atoi(parser.getParam(1).c_str());
+				}
+				else if (parser.getCommand() == "success")
+				{
+					session->clearSessionData();
+				}
+			}
+			if(session->IsSuccess)
+			{
+				message = ReadSocketMessage(ServerSocketUdp, session->Sin);
+				Execute(message, ServerSocketUdp, session);
+			}
 		}
+		else
+		{
+			for (int i = 0; i < Sessions.size(); i++)
+			{
+				if (Sessions[i].isUdp && Sessions[i].IsDownload())
+				{
+					Udp::SendSocketPackege(Sessions[0]);
+				}
+			}
+		}	
 	}
 	catch (int)
 	{
-		CloseSocket(session[0]);
+		cout << "Little error)";
 	}
 	return 1;
 }
