@@ -93,16 +93,20 @@ int Upload(const MyClient* client, CommandParser params)
 int Download(const MyClient* client, CommandParser params)
 {
 	int fileSize = FileSize(params.getParam(1));
-	bool isDownload = fileSize == stoi(params.getParam(3)) && fileSize != 0;
+	bool isDownload = fileSize == stoi(params.getParam(2)) && fileSize != 0;
 	SendSocketMessage(client->Socket, client->ServerSin, !isDownload ? to_string(fileSize) : "success");
 	if (isDownload)
-		return 1; 
+	{
+		if (client->IsUdp)
+			SendSocketMessage(client->Socket, client->ServerSin, "connect");
+		return 1;
+	}
+
 	int result;
-	if(client->IsUdp)
+	if (client->IsUdp)
 	{
 		Session session(client->Socket);
 		session.Sin = client->ServerSin;
-
 		session.setSessionData("download", params.getParam(1), stoi(params.getParam(2)), fileSize);
 		result = Udp::ReadFile(session);
 	}

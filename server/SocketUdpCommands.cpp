@@ -93,6 +93,7 @@ namespace Udp
 	{
 		timeval tv;
 		fd_set set;
+		string message = ReadSocketMessage(session.ClientSocket, session.Sin);
 		while (true)
 		{
 			FD_ZERO(&set);
@@ -105,7 +106,7 @@ namespace Udp
 			if (activity > 0)
 			{
 				CommandParser parser;
-				string message = ReadSocketMessage(session.ClientSocket, session.Sin);
+				message = ReadSocketMessage(session.ClientSocket, session.Sin);
 				parser.setMessage(message);
 				if (parser.getCommand() == "lastPosition")
 				{
@@ -116,6 +117,8 @@ namespace Udp
 				else if (parser.getCommand() == "success")
 				{
 					session.clearSessionData();
+					ShowMessage("Success");
+					SendSocketMessage(session.ClientSocket, session.Sin, "connect");
 					break;
 				}
 			}
@@ -164,22 +167,16 @@ namespace Udp
 			{
 				if ((int)(session.LastPosition / MAX_DATA_LENGTH) + 1 > package.Number)
 				{
-					cout << "-";
 					return 0;
 				}
-				//cout << package.Number << endl;
 				if (!session.isAwaitPackage)
 				{
 					session.isAwaitPackage = true;
 					SendSocketMessage(session.ClientSocket, session.Sin, string("lastPosition ") += to_string(session.LastPosition));
 				}
-				cout << "-";
 				return 0;
 			}
 			session.isAwaitPackage = false;
-			/*ShowMessage(string(to_string(package.Number)) += string(" | ") +=
-			string(to_string(session.LastPosition)) += string(" : ")
-			+= to_string(session.FileSize) += "\n");*/
 			if (session.ReadBufferLength < session.MaxReadBufferLength - MAX_DATA_LENGTH)
 			{
 				WritePackageToBuffer(session, package);
@@ -194,10 +191,29 @@ namespace Udp
 		{
 			WriteBufferToFile(session);
 			session.clearSessionData();
-			SendSocketMessage(session.ClientSocket, session.Sin, "end success");
+			SendSocketMessage(session.ClientSocket, session.Sin, "success");
 			return 1;
 		}
 		return 0;
+	}
+
+	void CleanDebris(const Session session)
+	{
+		char buffer[1024];
+		sockaddr_in sin = session.Sin;
+		int size = sizeof(sin);
+		while (true)
+		{
+			int result = recvfrom(session.ClientSocket, buffer, 1024, MSG_PEEK,
+				reinterpret_cast<sockaddr*>(&sin), &size);
+			if (result == SOCKET_ERROR)
+			{
+				recvfrom(session.ClientSocket, buffer, 1024, 0,
+					reinterpret_cast<sockaddr*>(&sin), &size);
+			}
+			else
+				return;
+		}
 	}
 
 	int ReadFile(Session &session)
@@ -222,6 +238,9 @@ namespace Udp
 				}
 			}
 		}
+		SendSocketMessage(session.ClientSocket, session.Sin, "connect");
+		CleanDebris(session);
+		ShowMessage("Success");
 		return 1;
 	}
 }

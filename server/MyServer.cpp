@@ -290,6 +290,7 @@ int MyServer::ExecuteUdpClientRequest(bool isRead)
 				else if (parser.getCommand() == "success")
 				{
 					session->clearSessionData();
+					SendSocketMessage(session->ClientSocket, session->Sin, ">");
 				}
 			}
 			if(session->IsSuccess)
@@ -309,9 +310,10 @@ int MyServer::ExecuteUdpClientRequest(bool isRead)
 			}
 		}	
 	}
-	catch (int)
+	catch (char)
 	{
 		cout << "Little error)";
+
 	}
 	return 1;
 }
