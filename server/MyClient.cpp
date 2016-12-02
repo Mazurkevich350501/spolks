@@ -61,16 +61,27 @@ int GetChoice()
 bool MyClient::Connect()
 {	
 	int choice = GetChoice();
-	Socket = CreateSocket(choice == 1);
-	if (connect(Socket, reinterpret_cast<struct sockaddr *>(&ServerSin),
-		sizeof(ServerSin)) == SOCKET_ERROR)
+	IsUdp = choice == 2;
+	Socket = CreateSocket(!IsUdp);
+	if (!IsUdp)
 	{
-		return false;
+		if (connect(Socket, reinterpret_cast<struct sockaddr *>(&ServerSin),
+			sizeof(ServerSin)) == SOCKET_ERROR)
+		{
+			return false;
+		}
 	}
-	IsUdp = false;
-	if(choice == 2)
+	else
 	{
-		IsUdp = true;
+		try
+		{
+			SendSocketMessage(Socket, ServerSin, "connect\r\n");
+			ReadSocketMessage(Socket, ServerSin);
+		}
+		catch (int)
+		{
+			return false;
+		}
 		SendSocketMessage(Socket, ServerSin, "connect\r\n");
 	}
 	return true;
