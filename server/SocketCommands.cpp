@@ -124,11 +124,11 @@ int SendSocketPackege(Session &session)
 }
 
 int SendFile(SOCKET socket, sockaddr_in toAddr, string filePath, int fileSize, int startPosition)
-{ 
+{
 	Session session(socket);
 	session.Sin = toAddr;
 	session.setSessionData("upload", filePath, fileSize, startPosition, false);
-	
+
 	while (session.LastPosition != session.FileSize)
 	{
 		SendSocketPackege(session);

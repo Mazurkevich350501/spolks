@@ -3,7 +3,11 @@
 
 void CommandParser::setMessage(string message)
 {
-	stringstream messageStream(message);
+	string temp = message;
+	int position = temp.find('\n');
+	if (position > 0)
+		temp.resize(position);
+	stringstream messageStream(temp);
 	string buf;
 	Commands.clear();
 	while (messageStream >> buf)

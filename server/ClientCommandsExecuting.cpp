@@ -68,6 +68,12 @@ int Upload(const MyClient* client, CommandParser params)
 	if (fileSize != 0 && fileSize > stoi(params.getParam(3)))
 	{
 		SendSocketMessage(client->Socket, client->ServerSin, "success");
+		string message = ReadSocketMessage(client->Socket, client->ServerSin);
+		if (message == "error")
+		{
+			SendSocketMessage(client->Socket, client->ServerSin, "success");
+			return 1;
+		}
 		int result;
 		if (client->IsUdp)
 		{
@@ -97,8 +103,6 @@ int Download(const MyClient* client, CommandParser params)
 	SendSocketMessage(client->Socket, client->ServerSin, !isDownload ? to_string(fileSize) : "success");
 	if (isDownload)
 	{
-		if (client->IsUdp)
-			SendSocketMessage(client->Socket, client->ServerSin, "connect");
 		return 1;
 	}
 
@@ -114,7 +118,6 @@ int Download(const MyClient* client, CommandParser params)
 	{
 		result = ReadFile(client->Socket, client->ServerSin, params.getParam(1), stoi(params.getParam(2)), fileSize);
 	}
-	SendSocketMessage(client->Socket, client->ServerSin, result > 0 ? "success" : "error");
 	return result;
 }
 

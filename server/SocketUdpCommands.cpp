@@ -93,7 +93,7 @@ namespace Udp
 	{
 		timeval tv;
 		fd_set set;
-		string message = ReadSocketMessage(session.ClientSocket, session.Sin);
+
 		while (true)
 		{
 			FD_ZERO(&set);
@@ -106,7 +106,7 @@ namespace Udp
 			if (activity > 0)
 			{
 				CommandParser parser;
-				message = ReadSocketMessage(session.ClientSocket, session.Sin);
+				string message = ReadSocketMessage(session.ClientSocket, session.Sin);
 				parser.setMessage(message);
 				if (parser.getCommand() == "lastPosition")
 				{
@@ -238,7 +238,6 @@ namespace Udp
 				}
 			}
 		}
-		SendSocketMessage(session.ClientSocket, session.Sin, "connect");
 		CleanDebris(session);
 		ShowMessage("Success");
 		return 1;

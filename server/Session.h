@@ -79,6 +79,8 @@ public:
 		if (ReadBuffer != NULL)
 			delete[]ReadBuffer;
 		ReadBuffer = NULL;
+		ReadBufferLength = 0;
+		BufferStartPosition = 0;
 	}
 	void setSessionData(string command, string filePath, int fileSize, int lastPosition, bool isReadTcp)
 	{
@@ -91,6 +93,8 @@ public:
 			? MaxReadBufferLength * 2
 			: MaxReadBufferLength;
 		ReadBuffer = new char[bufferLength];
+		ReadBufferLength = 0;
+		BufferStartPosition = 0;
 	}
 	void setSocket(SOCKET socket)
 	{

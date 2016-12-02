@@ -4,7 +4,7 @@
 #include <map>
 #include <time.h>
 
-enum commands {getTime = 1, echo, close, upload, download, connectMe};
+enum commands {getTime = 1, echo, close, upload, download, connectMe, success};
 
 map<string, commands> CommandMapping() {
 	map<string, commands> mapping;
@@ -15,6 +15,7 @@ map<string, commands> CommandMapping() {
 	mapping["upload"] = upload;
 	mapping["download"] = download;
 	mapping["connect"] = connectMe;
+	mapping["success"] = success;
 
 	return mapping;
 }
@@ -51,6 +52,7 @@ int MyServer::Execute(string message, SOCKET socket, Session* session)
 	case download:
 		return executeDownload(socket, cParser, session);
 	case connectMe:
+	case success:
 		SendSocketMessage(socket, session[0].Sin, ">");
 		return 0;
 	default:
@@ -107,7 +109,12 @@ int executeUpload(SOCKET socket, CommandParser params, Session* currentSession)
 		currentSession->setSessionData("upload", params.getParam(1), 
 			stoi(params.getParam(2)), startPosition, isTcpRead);
 	}
-	SendSocketMessage(socket, currentSession->Sin, message);
+	else
+	{
+		SendSocketMessage(currentSession->ClientSocket, currentSession->Sin, "error");
+		return 1;
+	}
+	SendSocketMessage(currentSession->ClientSocket, currentSession->Sin, "success");
 	return 1;
 }
 
@@ -123,6 +130,7 @@ int executeDownload(SOCKET socket, CommandParser params, Session* currentSession
 		message = ReadSocketMessage(socket, currentSession->Sin);
 		if(message == "success\r\n")
 		{
+			SendSocketMessage(currentSession->ClientSocket, currentSession->Sin, ">");
 			return 1;
 		}
 		startPosition = stoi(message);
