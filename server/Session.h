@@ -4,6 +4,7 @@
 
 using namespace std;
 
+#define MAX_BUFFER_LENGTH 20000000
 
 inline string GetSessionName(struct sockaddr_in sin)
 {
@@ -37,7 +38,7 @@ public:
 	char* ReadBuffer = NULL;
 	int ReadBufferLength = 0;
 	int BufferStartPosition = 0;
-	const int MaxReadBufferLength = 20000000;
+	const int MaxReadBufferLength = MAX_BUFFER_LENGTH;
 
 public:
 	Session &operator=(Session &a)
@@ -79,14 +80,17 @@ public:
 			delete[]ReadBuffer;
 		ReadBuffer = NULL;
 	}
-	void setSessionData(string command, string filePath, int fileSize, int lastPosition)
+	void setSessionData(string command, string filePath, int fileSize, int lastPosition, bool isReadTcp)
 	{
 		FilePath = filePath;
 		FileSize = fileSize;
 		LastPosition = lastPosition;
 		createLastCommand(command);
 		IsSuccess = false;
-		ReadBuffer = new char[MaxReadBufferLength];
+		int bufferLength = isReadTcp
+			? MaxReadBufferLength * 2
+			: MaxReadBufferLength;
+		ReadBuffer = new char[bufferLength];
 	}
 	void setSocket(SOCKET socket)
 	{

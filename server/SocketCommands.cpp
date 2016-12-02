@@ -4,7 +4,6 @@
 #include <fstream>
 
 #define messageBufferLength 1024
-#define packageLength 800000
 
 void ShowMessage(string message)
 {
@@ -50,34 +49,69 @@ int SendSocketMessage(SOCKET boundSocket, struct sockaddr_in toAddr, string mess
 	return ret;
 }
 
+void WriteFileToBuffer(Session &session)
+{
+	fstream file;
+	file.open(session.FilePath, ios::in | ios::binary | ios::ate);
+	if (!file.is_open()) return;
+	int fileSize = file.tellg();
+	if (session.LastPosition < fileSize)
+	{
+		int bufferSize = fileSize - session.LastPosition < session.MaxReadBufferLength
+			? fileSize - session.LastPosition
+			: session.MaxReadBufferLength;
+		file.seekg(session.LastPosition, ios_base::beg);
+		file.read(session.ReadBuffer, bufferSize);
+		session.ReadBufferLength = bufferSize;
+	}
+	else
+	{
+		session.ReadBufferLength = 0;
+	}
+	session.BufferStartPosition = session.LastPosition;
+	file.close();
+}
+
+void WriteBufferToFile(Session &session)
+{
+	fstream file;
+	file.open(session.FilePath, ios::out | ios::binary | ios::ate);
+	if (!file.is_open()) return;
+	file.seekg(session.LastPosition - session.ReadBufferLength, ios_base::end);
+	file.write(session.ReadBuffer, session.ReadBufferLength);
+	session.BufferStartPosition = session.LastPosition;
+	session.ReadBufferLength = 0;
+	file.close();
+}
+
 int SendPackage(SOCKET socket, sockaddr_in toAddr, char* package, int size)
 {
 	return sendto(socket, package, size, 0, 
 		reinterpret_cast<sockaddr*>(&toAddr), sizeof(toAddr));
 }
 
+int SendTcpPackage(Session &session) 
+{
+	int sendBufferSize = session.LastPosition - session.BufferStartPosition;
+	return SendPackage(session.ClientSocket, session.Sin,
+		session.ReadBuffer + sendBufferSize, session.ReadBufferLength - sendBufferSize);
+}
+
 int SendSocketPackege(Session &session)
 {
-	fstream file;
-	file.open(session.FilePath, ios::in | ios::binary | ios::ate);
-	if (!file.is_open()) return -1;
-
-	file.seekg(session.LastPosition, ios_base::beg);
-	char package[packageLength];
 	if (session.LastPosition < session.FileSize)
 	{
-		int sendSize = session.FileSize - session.LastPosition < packageLength
-			? session.FileSize - session.LastPosition
-			: packageLength;
-		file.read(package, sendSize);
-		int ret = SendPackage(session.ClientSocket, session.Sin, package, sendSize);
+		if (session.LastPosition - session.BufferStartPosition == session.ReadBufferLength)
+		{
+			WriteFileToBuffer(session);
+		}
+		int ret = SendTcpPackage(session);
 		if (ret == SOCKET_ERROR)
 		{
-			file.close();
 			throw ret;
 		}
 		session.LastPosition += ret;
-		file.close();
+		cout << ret << endl;
 	}
 	if(session.LastPosition == session.FileSize)
 	{
@@ -91,63 +125,52 @@ int SendSocketPackege(Session &session)
 
 int SendFile(SOCKET socket, sockaddr_in toAddr, string filePath, int fileSize, int startPosition)
 { 
-	fstream file;
-	file.open(filePath, ios::in | ios::binary | ios::ate);
-	if (!file.is_open()) return -1;
+	Session session(socket);
+	session.Sin = toAddr;
+	session.setSessionData("upload", filePath, fileSize, startPosition, false);
 	
-	int nSendSize = file.tellg();
-	
-	nSendSize -= startPosition;
-	file.seekg(startPosition, ios_base::beg);
-	char package[packageLength];
-
-	while (nSendSize > 0)
+	while (session.LastPosition != session.FileSize)
 	{
-		int sendSize = nSendSize < packageLength ? nSendSize : packageLength;
-		file.read(package, packageLength);
-		int ret = SendPackage(socket, toAddr, package, sendSize);
-		if (ret == SOCKET_ERROR)
-		{
-			file.close();
-			throw ret;
-		}
-		nSendSize -= ret;
+		SendSocketPackege(session);
 	}
-	file.close();
 	return 1;
 }
 
-int ReadPackege(SOCKET socket, sockaddr_in fromAddr, char* package)
+int ReadPackege(SOCKET socket, sockaddr_in fromAddr, char* package, int size)
 {
 	int fromLen = sizeof(fromAddr);
-	return recvfrom(socket, package, packageLength, 0, 
+	return recvfrom(socket, package, size, 0,
 		reinterpret_cast<sockaddr*>(&fromAddr), &fromLen);
+}
+
+int ReadTcpPackage(Session &session)
+{
+	int readBufferSize = session.LastPosition - session.BufferStartPosition;
+	return ReadPackege(session.ClientSocket, session.Sin, 
+		session.ReadBuffer + readBufferSize, session.MaxReadBufferLength);
 }
 
 int ReadSocketPackege(Session &session)
 {
-	fstream file;
-	file.open(session.FilePath, ios::out | ios::binary | ios::ate);
-	if (!file.is_open()) return -1;
-	
-	char package[packageLength];
-	file.seekg(session.LastPosition, ios_base::end);
 	if(session.LastPosition < session.FileSize)
 	{
-		int ret = ReadPackege(session.ClientSocket, session.Sin, package);
+		if (session.ReadBufferLength >= session.MaxReadBufferLength)
+		{
+			WriteBufferToFile(session);
+		}
+		int ret = ReadTcpPackage(session);
 		if (ret == SOCKET_ERROR)
 		{
-			file.close();
 			throw ret;
 		}
-		file.write(package, ret);
 		session.LastPosition += ret;
-		file.close();
+		session.ReadBufferLength += ret;
 		ShowMessage(string(to_string(session.LastPosition)) += string(" : ")
 			+= to_string(session.FileSize) += "\n");
 	}
 	if(session.LastPosition == session.FileSize)
 	{
+		WriteBufferToFile(session);
 		session.clearSessionData();
 		SendSocketMessage(session.ClientSocket, session.Sin, "success");
 	}
@@ -156,26 +179,13 @@ int ReadSocketPackege(Session &session)
 
 int ReadFile(SOCKET socket, sockaddr_in fromAddr, string filePath, int fileSize, int startPosition)
 {
-	fstream file;
-	file.open(filePath, ios::out | ios::binary | ios::ate);
-	if (!file.is_open()) return -1;
+	Session session(socket);
+	session.Sin = fromAddr;
+	session.setSessionData("download", filePath, fileSize, startPosition, true);
 
-	char package[packageLength];
-	int downloadSize = startPosition;
-	file.seekg(startPosition, ios_base::end);
-	while (downloadSize < fileSize)
+	while (session.IsDownload())
 	{
-		int ret = ReadPackege(socket, fromAddr, package);
-		if (ret == SOCKET_ERROR)
-		{
-			file.close();
-			throw ret;
-		}
-		file.write(package, ret);
-		downloadSize += ret;
-		ShowMessage(string(to_string(downloadSize)) += string(" : ") 
-			+= to_string(fileSize) += "\n");
+		ReadSocketPackege(session);
 	}
-	file.close();
 	return 1;
 }

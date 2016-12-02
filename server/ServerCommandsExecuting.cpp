@@ -97,12 +97,15 @@ string createStartTransmitMessage(string command, string filePath, int fileSize,
 int executeUpload(SOCKET socket, CommandParser params, Session* currentSession)
 {
 	int startPosition = FileSize(params.getParam(1));
-	string message = createStartTransmitMessage("startUpload", params.getParam(1), stoi(params.getParam(2)), startPosition);
+	string message = createStartTransmitMessage("startUpload", params.getParam(1),
+		stoi(params.getParam(2)), startPosition);
 	SendSocketMessage(socket, currentSession->Sin, message);
 	message = ReadSocketMessage(socket, currentSession->Sin);
 	if(message == "success\r\n")
 	{
-		currentSession->setSessionData("upload", params.getParam(1), stoi(params.getParam(2)), startPosition);
+		bool isTcpRead = !currentSession->isUdp;
+		currentSession->setSessionData("upload", params.getParam(1), 
+			stoi(params.getParam(2)), startPosition, isTcpRead);
 	}
 	SendSocketMessage(socket, currentSession->Sin, message);
 	return 1;
@@ -129,6 +132,6 @@ int executeDownload(SOCKET socket, CommandParser params, Session* currentSession
 		SendSocketMessage(socket, currentSession->Sin, "error");
 		return 0;
 	}
-	currentSession->setSessionData("download", params.getParam(1), fileSize, startPosition);
+	currentSession->setSessionData("download", params.getParam(1), fileSize, startPosition, false);
 	return 1;
 }

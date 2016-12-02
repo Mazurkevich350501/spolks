@@ -74,7 +74,7 @@ int Upload(const MyClient* client, CommandParser params)
 			Session session(client->Socket);
 			session.Sin = client->ServerSin;
 
-			session.setSessionData("upload", params.getParam(1), stoi(params.getParam(2)), stoi(params.getParam(3)));
+			session.setSessionData("upload", params.getParam(1), stoi(params.getParam(2)), stoi(params.getParam(3)), false);
 			result = Udp::SendFile(session);
 		}
 		else
@@ -107,7 +107,7 @@ int Download(const MyClient* client, CommandParser params)
 	{
 		Session session(client->Socket);
 		session.Sin = client->ServerSin;
-		session.setSessionData("download", params.getParam(1), stoi(params.getParam(2)), fileSize);
+		session.setSessionData("download", params.getParam(1), stoi(params.getParam(2)), fileSize, false);
 		result = Udp::ReadFile(session);
 	}
 	else
