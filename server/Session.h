@@ -94,12 +94,17 @@ public:
 			: MaxReadBufferLength;
 		ReadBuffer = new char[bufferLength];
 		ReadBufferLength = 0;
-		BufferStartPosition = 0;
+		BufferStartPosition = LastPosition;
 	}
 	void setSocket(SOCKET socket)
 	{
 		Sin = GetSin(socket);
 		ClientSocket = socket;
+	}
+	~Session()
+	{
+		if (ReadBuffer != NULL)
+			delete[]ReadBuffer;
 	}
 private:
 	void createLastCommand(string command)
