@@ -43,15 +43,24 @@ SOCKET CreateSocket(bool isTcp)
 	return newSocket;
 }
 
+int GetChoice() 
+{
+	static int result = 0;
+	if (result == 0)
+	{
+		while (result < 1 || result > 2)
+		{
+			cout << "Choice protocol:\n" << "1-tcp, 2-udp: ";
+			cin >> result;
+			cin.ignore(INT_MAX, '\n');
+		}
+	}
+	return result;
+}
+
 bool MyClient::Connect()
 {	
-	int choice = 0;
-	while (choice < 1 || choice > 2)
-	{
-		cout << "Choice protocol:\n" << "1-tcp, 2-udp: ";
-		cin >> choice;
-		cin.ignore(INT_MAX, '\n');
-	}
+	int choice = GetChoice();
 	Socket = CreateSocket(choice == 1);
 	if (connect(Socket, reinterpret_cast<struct sockaddr *>(&ServerSin),
 		sizeof(ServerSin)) == SOCKET_ERROR)

@@ -110,11 +110,13 @@ int ClientMain()
 				if (!client.Reconnect())
 				{
 					ShowMessage("Reconnect error\n");
-					if(ReconnectChoise())
+					if (ReconnectChoise())
 						continue;
 					ShowError(ex);
 					return 0;
 				}
+				else
+					break;
 			}
 		}
 	}
