@@ -1,6 +1,6 @@
 #pragma once
 
-#include <WinSock2.h>
+#include "socket.h"
 #include "Session.h"
 
 using namespace std;

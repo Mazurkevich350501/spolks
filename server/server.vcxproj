@@ -157,6 +157,7 @@
     <ClInclude Include="MyServer.h" />
     <ClInclude Include="Package.h" />
     <ClInclude Include="Session.h" />
+    <ClInclude Include="socket.h" />
     <ClInclude Include="SocketCommands.h" />
   </ItemGroup>
   <ItemGroup>
