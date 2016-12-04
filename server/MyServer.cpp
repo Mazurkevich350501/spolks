@@ -75,7 +75,7 @@ int MyServer::ServerProcess()
 		timeval tv;
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
-		int activity = select(max_sd + 1, &Readfds, NULL, NULL, &tv);
+		int activity = select(max_sd + 1, &Readfds, NULL, NULL, Writefds.fd_count ? &tv : NULL);
 		if ((activity < 0) && (errno != EINTR))
 		{
 			ShowMessage("select error\n");
